@@ -1,5 +1,20 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Auth + RLS notes (Assignment 3)
+
+### OAuth callback route
+- This app implements a server-side callback handler at `/auth/callback` in [`app/auth/callback/route.ts`](app/auth/callback/route.ts).
+- In Supabase Auth settings, you must allowlist redirect URLs like:
+  - `http://localhost:3000/auth/callback`
+  - `https://<your-vercel-deployment>.vercel.app/auth/callback`
+- Do **not** add custom query parameters to those allowlisted URLs.
+
+### RLS (Role-level Security) reminder
+- Treat **RLS as the source of truth**: even if your UI hides something, the database must enforce access.
+- Typical `images` table policies:
+  - **Anon** can `SELECT` only rows with `is_public = true`
+  - **Authenticated** can `SELECT` rows where `profile_id = auth.uid()` (and optionally public rows)
+
 ## Getting Started
 
 First, run the development server:

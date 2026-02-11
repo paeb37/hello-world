@@ -1,5 +1,6 @@
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import type { ImageRow } from "@/types/supabase";
+import { AuthGate } from "@/app/_components/AuthGate";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -27,11 +28,53 @@ function formatDate(iso: string) {
 }
 
 export default async function Home() {
+  const auth = await (async () => {
+    try {
+      const client = await getSupabaseServerClient();
+      const { data, error } = await client.auth.getUser();
+      return {
+        supabase: client,
+        isSignedIn: Boolean(data.user) && !error,
+        authErrorMessage: error?.message ?? null,
+      };
+    } catch (err) {
+      return {
+        supabase: null,
+        isSignedIn: false,
+        authErrorMessage: err instanceof Error ? err.message : "Unknown error",
+      };
+    }
+  })();
+
+  if (!auth.supabase || !auth.isSignedIn) {
+    return (
+      <div className="min-h-screen bg-zinc-50 px-6 py-16 text-zinc-900 dark:bg-black dark:text-zinc-50">
+        <main className="mx-auto w-full max-w-3xl">
+          <h1 className="text-3xl font-semibold tracking-tight">
+            Sign in required
+          </h1>
+          <p className="mt-3 max-w-prose text-sm leading-6 text-zinc-600 dark:text-zinc-400">
+            To view this page, sign in with Google.
+          </p>
+          <div className="mt-8">
+            <AuthGate signedIn={false} />
+          </div>
+
+          {auth.authErrorMessage ? (
+            <pre className="mt-8 overflow-x-auto rounded-xl border border-zinc-200 bg-white p-4 text-xs text-zinc-800 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
+              {auth.authErrorMessage}
+            </pre>
+          ) : null}
+        </main>
+      </div>
+    );
+  }
+
+  const supabase = auth.supabase;
   let images: ImageListRow[] = [];
   let errorMessage: string | null = null;
 
   try {
-    const supabase = getSupabaseServerClient();
     const { data, error } = await supabase
       .from("images")
       .select(
@@ -74,8 +117,11 @@ export default async function Home() {
               Read-only feed from Supabase table <span className="font-mono">images</span>.
             </p>
           </div>
-          <div className="text-sm text-zinc-600 dark:text-zinc-400">
-            {images.length} result{images.length === 1 ? "" : "s"}
+          <div className="flex items-center gap-3">
+            <div className="text-sm text-zinc-600 dark:text-zinc-400">
+              {images.length} result{images.length === 1 ? "" : "s"}
+            </div>
+            <AuthGate signedIn compact />
           </div>
         </header>
 
