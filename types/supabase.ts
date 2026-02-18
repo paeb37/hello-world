@@ -12,3 +12,22 @@ export type ImageRow = {
   embedding: unknown | null;
 };
 
+export type CaptionRow = {
+  id: string;
+  created_datetime_utc: string;
+  modified_datetime_utc: string | null;
+  content: string | null;
+  is_public: boolean;
+  profile_id: string;
+  image_id: string;
+  like_count: number;
+};
+
+export type CaptionVoteInsert = {
+  caption_id: string;
+  profile_id: string;
+  vote_value: number;
+  created_datetime_utc: string;
+  modified_datetime_utc?: string | null;
+};
+

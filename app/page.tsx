@@ -1,20 +1,17 @@
 import { getSupabaseServerClient } from "@/lib/supabase/server";
-import type { ImageRow } from "@/types/supabase";
 import { AuthGate } from "@/app/_components/AuthGate";
+import { CaptionVoteButtons } from "@/app/_components/CaptionVoteButtons";
+import type { CaptionRow } from "@/types/supabase";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-type ImageListRow = Pick<
-  ImageRow,
-  | "id"
-  | "created_datetime_utc"
-  | "url"
-  | "image_description"
-  | "additional_context"
-  | "is_public"
-  | "celebrity_recognition"
->;
+type CaptionListRow = Pick<
+  CaptionRow,
+  "id" | "created_datetime_utc" | "content" | "is_public" | "like_count" | "image_id"
+> & {
+  images: { url: string | null } | null;
+};
 
 const dateFormatter = new Intl.DateTimeFormat("en-US", {
   dateStyle: "medium",
@@ -35,18 +32,20 @@ export default async function Home() {
       return {
         supabase: client,
         isSignedIn: Boolean(data.user) && !error,
+        userId: data.user?.id ?? null,
         authErrorMessage: error?.message ?? null,
       };
     } catch (err) {
       return {
         supabase: null,
         isSignedIn: false,
+        userId: null,
         authErrorMessage: err instanceof Error ? err.message : "Unknown error",
       };
     }
   })();
 
-  if (!auth.supabase || !auth.isSignedIn) {
+  if (!auth.supabase || !auth.isSignedIn || !auth.userId) {
     return (
       <div className="min-h-screen bg-zinc-50 px-6 py-16 text-zinc-900 dark:bg-black dark:text-zinc-50">
         <main className="mx-auto w-full max-w-3xl">
@@ -71,21 +70,22 @@ export default async function Home() {
   }
 
   const supabase = auth.supabase;
-  let images: ImageListRow[] = [];
+  const profileId = auth.userId;
+  let captions: CaptionListRow[] = [];
   let errorMessage: string | null = null;
 
   try {
     const { data, error } = await supabase
-      .from("images")
+      .from("captions")
       .select(
-        "id, created_datetime_utc, url, image_description, additional_context, is_public, celebrity_recognition",
+        "id, created_datetime_utc, content, is_public, like_count, image_id, images(url)",
       )
       .order("created_datetime_utc", { ascending: false });
 
     if (error) {
       errorMessage = error.message;
     } else {
-      images = (data ?? []) as ImageListRow[];
+      captions = (data ?? []) as unknown as CaptionListRow[];
     }
   } catch (err) {
     errorMessage = err instanceof Error ? err.message : "Unknown error";
@@ -95,9 +95,9 @@ export default async function Home() {
     return (
       <div className="min-h-screen bg-zinc-50 px-6 py-16 text-zinc-900 dark:bg-black dark:text-zinc-50">
         <main className="mx-auto w-full max-w-5xl">
-          <h1 className="text-2xl font-semibold tracking-tight">Images</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Captions</h1>
           <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-            Couldn’t load images from Supabase.
+            Couldn’t load captions from Supabase.
           </p>
           <pre className="mt-6 overflow-x-auto rounded-xl border border-zinc-200 bg-white p-4 text-xs text-zinc-800 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
             {errorMessage}
@@ -112,42 +112,40 @@ export default async function Home() {
       <main className="mx-auto w-full max-w-5xl">
         <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Images</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">Captions</h1>
             <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-              Read-only feed from Supabase table <span className="font-mono">images</span>.
+              Read-only feed from Supabase table{" "}
+              <span className="font-mono">captions</span>.
             </p>
           </div>
           <div className="flex items-center gap-3">
             <div className="text-sm text-zinc-600 dark:text-zinc-400">
-              {images.length} result{images.length === 1 ? "" : "s"}
+              {captions.length} result{captions.length === 1 ? "" : "s"}
             </div>
             <AuthGate signedIn compact />
           </div>
         </header>
 
-        {images.length === 0 ? (
+        {captions.length === 0 ? (
           <div className="mt-10 rounded-2xl border border-dashed border-zinc-300 bg-white p-10 text-center text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-400">
-            No images yet.
+            No captions yet.
           </div>
         ) : (
           <section className="mt-10 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-            {images.map((image) => {
-              const title =
-                image.image_description ??
-                image.additional_context ??
-                image.celebrity_recognition ??
-                "Untitled";
-              const isPublic = image.is_public === true;
+            {captions.map((caption) => {
+              const title = caption.content ?? "(empty caption)";
+              const isPublic = caption.is_public === true;
+              const imageUrl = caption.images?.url ?? null;
 
               return (
                 <article
-                  key={image.id}
+                  key={caption.id}
                   className="group overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm transition-shadow hover:shadow-md dark:border-zinc-800 dark:bg-zinc-950"
                 >
                   <div className="relative aspect-[4/3] w-full overflow-hidden bg-zinc-100 dark:bg-zinc-900">
-                    {image.url ? (
+                    {imageUrl ? (
                       <a
-                        href={image.url}
+                        href={imageUrl}
                         target="_blank"
                         rel="noreferrer"
                         className="block h-full w-full"
@@ -155,7 +153,7 @@ export default async function Home() {
                       >
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img
-                          src={image.url}
+                          src={imageUrl}
                           alt={title}
                           loading="lazy"
                           className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
@@ -184,23 +182,26 @@ export default async function Home() {
                       </span>
                     </div>
 
-                    <dl className="grid grid-cols-1 gap-2 text-xs text-zinc-600 dark:text-zinc-400">
-                      <div className="flex items-center justify-between gap-3">
-                        <dt className="font-medium text-zinc-500 dark:text-zinc-500">
-                          Created
-                        </dt>
-                        <dd className="font-mono">
-                          {formatDate(image.created_datetime_utc)}
-                        </dd>
-                      </div>
-                      <div className="flex items-center justify-between gap-3">
-                        <dt className="font-medium text-zinc-500 dark:text-zinc-500">
-                          ID
-                        </dt>
-                        <dd className="max-w-[22ch] truncate font-mono">
-                          {image.id}
-                        </dd>
-                      </div>
+                    <CaptionVoteButtons
+                      captionId={caption.id}
+                      profileId={profileId}
+                      initialLikeCount={caption.like_count}
+                    />
+
+                    <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-xs text-zinc-600 dark:text-zinc-400">
+                      <dt className="font-medium text-zinc-500 dark:text-zinc-500">
+                        Created
+                      </dt>
+                      <dd className="justify-self-end font-mono">
+                        {formatDate(caption.created_datetime_utc)}
+                      </dd>
+
+                      <dt className="font-medium text-zinc-500 dark:text-zinc-500">
+                        ID
+                      </dt>
+                      <dd className="max-w-[22ch] justify-self-end truncate font-mono">
+                        {caption.id}
+                      </dd>
                     </dl>
                   </div>
                 </article>
