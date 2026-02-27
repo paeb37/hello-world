@@ -1,6 +1,7 @@
 import { getSupabaseServerClient } from "@/lib/supabase/server";
 import { AuthGate } from "@/app/_components/AuthGate";
 import { CaptionVoteButtons } from "@/app/_components/CaptionVoteButtons";
+import { ImageUploadPipelineForm } from "@/app/_components/ImageUploadPipelineForm";
 import type { CaptionRow } from "@/types/supabase";
 
 export const dynamic = "force-dynamic";
@@ -13,9 +14,20 @@ type CaptionListRow = Pick<
   images: { url: string | null } | null;
 };
 
+type PageProps = {
+  searchParams?:
+    | Promise<{
+        debugImages?: string;
+      }>
+    | {
+        debugImages?: string;
+      };
+};
+
 const dateFormatter = new Intl.DateTimeFormat("en-US", {
   dateStyle: "medium",
   timeStyle: "short",
+  timeZone: "UTC",
 });
 
 function formatDate(iso: string) {
@@ -24,7 +36,10 @@ function formatDate(iso: string) {
   return dateFormatter.format(date);
 }
 
-export default async function Home() {
+export default async function Home({ searchParams }: PageProps) {
+  const resolvedSearchParams = searchParams ? await searchParams : undefined;
+  const debugImages = resolvedSearchParams?.debugImages === "1";
+
   const auth = await (async () => {
     try {
       const client = await getSupabaseServerClient();
@@ -73,13 +88,16 @@ export default async function Home() {
   const profileId = auth.userId;
   let captions: CaptionListRow[] = [];
   let errorMessage: string | null = null;
+  let debugImagesQueryError: string | null = null;
 
   try {
     const { data, error } = await supabase
       .from("captions")
       .select(
-        "id, created_datetime_utc, content, is_public, like_count, image_id, images(url)",
+        "id, created_datetime_utc, content, is_public, like_count, image_id, images!inner(url)",
       )
+      .not("content", "is", null)
+      .neq("content", "")
       .order("created_datetime_utc", { ascending: false });
 
     if (error) {
@@ -89,6 +107,9 @@ export default async function Home() {
     }
   } catch (err) {
     errorMessage = err instanceof Error ? err.message : "Unknown error";
+    if (debugImages) {
+      debugImagesQueryError = err instanceof Error ? err.message : "Unknown error";
+    }
   }
 
   if (errorMessage) {
@@ -125,6 +146,49 @@ export default async function Home() {
             <AuthGate signedIn compact />
           </div>
         </header>
+
+        {debugImages ? (
+          <details className="mt-6 rounded-2xl border border-zinc-200 bg-white p-5 text-xs text-zinc-800 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200">
+            <summary className="cursor-pointer select-none text-sm font-semibold text-zinc-900 dark:text-zinc-50">
+              Debug: image URL resolution
+            </summary>
+            <div className="mt-4 space-y-3">
+              <div className="grid gap-2 sm:grid-cols-2">
+                <div>
+                  <div className="font-medium text-zinc-600 dark:text-zinc-400">
+                    Captions loaded
+                  </div>
+                  <div className="font-mono">{captions.length}</div>
+                </div>
+                <div>
+                  <div className="font-medium text-zinc-600 dark:text-zinc-400">
+                    Captions with joined image row
+                  </div>
+                  <div className="font-mono">{captions.length}</div>
+                </div>
+                <div>
+                  <div className="font-medium text-zinc-600 dark:text-zinc-400">
+                    URLs mapped (non-null)
+                  </div>
+                  <div className="font-mono">
+                    {captions.filter((caption) => Boolean(caption.images?.url)).length}
+                  </div>
+                </div>
+              </div>
+
+              {debugImagesQueryError ? (
+                <div className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-rose-800 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-200">
+                  <div className="font-semibold">Captions/images query error</div>
+                  <pre className="mt-2 overflow-x-auto whitespace-pre-wrap font-mono">
+                    {debugImagesQueryError}
+                  </pre>
+                </div>
+              ) : null}
+            </div>
+          </details>
+        ) : null}
+
+        <ImageUploadPipelineForm />
 
         {captions.length === 0 ? (
           <div className="mt-10 rounded-2xl border border-dashed border-zinc-300 bg-white p-10 text-center text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-400">
