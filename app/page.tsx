@@ -133,10 +133,9 @@ export default async function Home({ searchParams }: PageProps) {
       <main className="mx-auto w-full max-w-5xl">
         <header className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Captions</h1>
+            <h1 className="text-2xl font-semibold tracking-tight">Humor Feed</h1>
             <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-400">
-              Read-only feed from Supabase table{" "}
-              <span className="font-mono">captions</span>.
+              Funny images and captions!
             </p>
           </div>
           <div className="flex items-center gap-3">
